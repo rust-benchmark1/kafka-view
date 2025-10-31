@@ -32,6 +32,9 @@ extern crate zookeeper;
 extern crate libc;
 extern crate mysql;
 extern crate postgres;
+extern crate ldap3;
+extern crate simple_ldap;
+extern crate url;
 
 #[macro_use]
 mod utils;

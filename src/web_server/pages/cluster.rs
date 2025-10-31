@@ -3,10 +3,11 @@ use maud::{html, Markup, PreEscaped};
 use metadata::{BrokerId, ClusterId};
 use web_server::pages;
 use web_server::view::layout;
-
+use url::Url;
 use cache::Cache;
 use config::Config;
-
+use ldap3::LdapConn;
+use std::error::Error;
 use rocket::State;
 
 fn broker_table(cluster_id: &ClusterId) -> PreEscaped<String> {
@@ -133,4 +134,18 @@ pub fn broker_page(
         }
     };
     layout::page(&format!("Broker: {}", cluster_id), content)
+}
+
+pub fn ldap_compare_from_input(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let s = input.trim().replace('\0', "");
+    if s.is_empty() {
+        return Ok(());
+    }
+
+    let mut ldap = LdapConn::new("ldap://127.0.0.1:389")?;
+    ldap.simple_bind("cn=admin,dc=example,dc=com", "secret")?;
+    //SINK
+    let _ = ldap.compare(&s, "objectClass", "person")?; 
+
+    Ok(())
 }
