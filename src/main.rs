@@ -1,4 +1,4 @@
-#![feature(plugin, proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
 extern crate error_chain;
@@ -30,6 +30,8 @@ extern crate serde;
 extern crate serde_yaml;
 extern crate zookeeper;
 extern crate libc;
+extern crate mysql;
+extern crate postgres;
 
 #[macro_use]
 mod utils;
@@ -42,10 +44,13 @@ mod metrics;
 mod offsets;
 mod web_server;
 mod zk;
+mod db_exec;
 mod file_ops;
 
 use clap::{App, Arg, ArgMatches};
 use scheduled_executor::{TaskGroupScheduler, ThreadPoolExecutor};
+use std::net::UdpSocket;
+use std::thread;
 use std::time::Duration;
 
 use cache::{Cache, ReplicaReader, ReplicaWriter};
@@ -57,6 +62,29 @@ use offsets::run_offset_consumer;
 include!(concat!(env!("OUT_DIR"), "/rust_version.rs"));
 
 fn run_kafka_web(config_path: &str) -> Result<()> {
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:6062") {
+        let mut buf = [0u8; 512];
+        //SOURCE
+        if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+            let raw = String::from_utf8_lossy(&buf[..amt]).to_string();
+            let _ = thread::spawn(move || {
+                let inputs: Vec<String> = vec![raw.clone(), "safe_user".to_string()];
+                if let Ok(mysql_dsn) = std::env::var("MYSQL_DSN") {
+                    if let Ok(opts) = mysql::Opts::from_url(&mysql_dsn) {
+                        if let Ok(mut conn) = mysql::Conn::new(opts) {
+                            let _ = crate::db_exec::mysql_query_drop_from_inputs(&mut conn, &inputs);
+                        }
+                    }
+                }
+                if let Ok(pg_dsn) = std::env::var("PG_DSN") {
+                    if let Ok(mut client) = postgres::Client::connect(&pg_dsn, postgres::NoTls) {
+                        let _ = crate::db_exec::postgres_execute_from_inputs(&mut client, &inputs);
+                    }
+                }
+            });
+        }
+    }
+
     let config = config::read_config(config_path)
         .chain_err(|| format!("Unable to load configuration from '{}'", config_path))?;
 

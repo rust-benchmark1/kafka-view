@@ -143,7 +143,8 @@ impl fairing::Fairing for GZip {
     }
 
     fn on_response(&self, request: &Request, response: &mut Response) {
-        use flate2::{Compression, FlateReadExt};
+        use flate2::read::GzEncoder;
+        use flate2::Compression;
         use std::io::{Cursor, Read};
         let headers = request.headers();
         if headers
@@ -151,7 +152,7 @@ impl fairing::Fairing for GZip {
             .any(|e| e.to_lowercase().contains("gzip"))
         {
             response.body_bytes().and_then(|body| {
-                let mut enc = body.gz_encode(Compression::Default);
+                let mut enc = GzEncoder::new(body.as_slice(), Compression::default());
                 let mut buf = Vec::with_capacity(body.len());
                 enc.read_to_end(&mut buf)
                     .map(|_| {
