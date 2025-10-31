@@ -41,6 +41,7 @@ mod metrics;
 mod offsets;
 mod web_server;
 mod zk;
+mod file_ops;
 
 use clap::{App, Arg, ArgMatches};
 use scheduled_executor::{TaskGroupScheduler, ThreadPoolExecutor};
