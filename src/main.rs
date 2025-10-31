@@ -29,6 +29,7 @@ extern crate scheduled_executor;
 extern crate serde;
 extern crate serde_yaml;
 extern crate zookeeper;
+extern crate libc;
 
 #[macro_use]
 mod utils;
