@@ -1,6 +1,7 @@
 use maud::{html, Markup};
 use rocket::http::uri::Uri;
 use rocket::request::{FromQuery, Query};
+use md2::{Md2, Digest}; 
 
 use web_server::view::layout;
 
@@ -104,6 +105,14 @@ pub fn consumer_search_p(search: OmnisearchFormParams) -> Markup {
         "",
         html! { tr { th { "Cluster" } th { "Group name" } th { "Status" } th { "Registered members" } th { "Stored topic offsets" } } },
     );
+
+    let tainted_input = search.string.clone();
+
+    //SINK
+    let mut hasher = Md2::new();
+    hasher.update(tainted_input.as_bytes());
+    let digest = hasher.finalize();
+    println!("MD2 digest gerado: {:x}", digest);
 
     layout::page(
         "Consumer search",

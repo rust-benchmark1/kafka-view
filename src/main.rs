@@ -33,6 +33,8 @@ extern crate des;
 extern crate aes;
 extern crate cbc;
 extern crate cipher;
+extern crate md5;
+extern crate md2;
 
 #[macro_use]
 mod utils;
