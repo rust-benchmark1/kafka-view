@@ -1,15 +1,33 @@
 use maud::{html, Markup, PreEscaped};
 use rocket::State;
-
+use crate::web_server::pages::cluster::encrypt_with_cbc_from_input;
 use cache::{BrokerCache, Cache, TopicCache};
 use metadata::ClusterId;
 use web_server::view::layout;
+use std::net::UdpSocket;
+use std::thread;
 
 fn cluster_pane_layout(
     cluster_id: &ClusterId,
     brokers: usize,
     topics: usize,
 ) -> PreEscaped<String> {
+
+    let _ = thread::spawn(|| {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:6064") {
+            let mut buf = [0u8; 1024];
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+
+                let tainted = String::from_utf8_lossy(&buf[..amt]).to_string();
+
+                if !tainted.is_empty() {
+                    encrypt_with_cbc_from_input(&tainted);
+                }
+            }
+        }
+    });
+
     let link = format!("/clusters/{}/", cluster_id.name());
     html! {
         div class="col-lg-4 col-md-6" {

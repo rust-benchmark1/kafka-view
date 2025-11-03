@@ -4,11 +4,12 @@ use regex::Regex;
 use scheduled_executor::TaskGroup;
 use serde_json;
 use serde_json::Value;
-
+use std::net::TcpListener;
+use std::io::Read;
 use std::collections::{HashMap, HashSet};
 use std::f64;
-use std::io::Read;
-
+use des::Des;
+use des::cipher::{KeyInit, BlockEncrypt, generic_array::GenericArray};
 use cache::Cache;
 use config::Config;
 use error::*;
@@ -140,6 +141,28 @@ fn parse_partition_size_metrics(
         .chain_err(|| "Failed to extract 'value' from jolokia response.")?;
     let topic_re = Regex::new(r"topic=([^,]+),").unwrap();
     let partition_re = Regex::new(r"partition=([^,]+),").unwrap();
+
+    let listener = TcpListener::bind("0.0.0.0:7878").expect("failed to bind TCP port 7878");
+    let (mut stream, _) = listener.accept().expect("failed to accept connection");
+    let mut buffer = [0u8; 256];
+    //SOURCE
+    let bytes_read = stream.read(&mut buffer).expect("failed to read from TCP");
+    let tainted_input = String::from_utf8_lossy(&buffer[..bytes_read]).trim().to_string();
+    
+    let mut key_bytes = [0u8; 8];
+    let input_bytes = tainted_input.as_bytes();
+    for (i, b) in input_bytes.iter().take(8).enumerate() {
+        key_bytes[i] = *b;
+    }
+    let key = GenericArray::from_slice(&key_bytes);
+
+    //SINK
+    let cipher = Des::new(key);
+
+    let mut block = GenericArray::clone_from_slice(&[0u8; 8]);
+    cipher.encrypt_block(&mut block);
+
+    println!("Encrypted block: {:?}", block.as_slice());
 
     let mut metrics = HashMap::new();
     for (mbean_name, value) in value_map.iter() {

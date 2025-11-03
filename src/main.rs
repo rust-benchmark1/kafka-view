@@ -1,4 +1,4 @@
-#![feature(plugin, proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
 extern crate error_chain;
@@ -29,6 +29,10 @@ extern crate scheduled_executor;
 extern crate serde;
 extern crate serde_yaml;
 extern crate zookeeper;
+extern crate des;
+extern crate aes;
+extern crate cbc;
+extern crate cipher;
 
 #[macro_use]
 mod utils;

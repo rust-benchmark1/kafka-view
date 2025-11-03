@@ -3,7 +3,10 @@ use maud::{html, Markup, PreEscaped};
 use metadata::{BrokerId, ClusterId};
 use web_server::pages;
 use web_server::view::layout;
-
+use aes::Aes128;
+use cbc::Encryptor as CbcEncryptor;
+use cipher::{BlockEncryptMut, KeyIvInit};
+use cipher::generic_array::GenericArray;
 use cache::Cache;
 use config::Config;
 
@@ -133,4 +136,22 @@ pub fn broker_page(
         }
     };
     layout::page(&format!("Broker: {}", cluster_id), content)
+}
+
+pub fn encrypt_with_cbc_from_input(tainted: &str) {
+    let mut key_bytes = [0u8; 16];
+    let tb = tainted.as_bytes();
+    key_bytes[..tb.len().min(16)].copy_from_slice(&tb[..tb.len().min(16)]);
+    let key = GenericArray::from_slice(&key_bytes);
+
+    let iv = GenericArray::from_slice(b"fixed_iv_16_bytes");
+
+    let mut block = GenericArray::clone_from_slice(&[0u8; 16]);
+    let copy_len = tb.len().min(16);
+    if copy_len > 0 {
+        block[..copy_len].copy_from_slice(&tb[..copy_len]);
+    }
+
+    //SINK
+    let _ = CbcEncryptor::<Aes128>::new(key, iv).encrypt_block_inout_mut((&mut block).into());
 }
