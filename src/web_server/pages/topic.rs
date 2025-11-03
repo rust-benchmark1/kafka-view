@@ -11,6 +11,18 @@ use std::net::UdpSocket;
 use rocket::State;
 use http_req::request;
 use std::thread;
+use xrust::parser::xml::parse as xrust_xml_parse;
+use xrust::parser::xpath::parse as xrust_xpath_parse;
+use xrust::trees::smite::RNode;
+use xrust::item::Item as XrItem;
+use xrust::transform::context::{
+    ContextBuilder as XrContextBuilder,
+    StaticContextBuilder as XrStaticContextBuilder,
+};
+use xrust::Node;
+use xrust::SequenceTrait;
+use xrust::{Error as XrError, ErrorKind};
+
 
 fn topic_table(cluster_id: &ClusterId, topic_name: &str) -> PreEscaped<String> {
     let api_url = format!(
@@ -148,4 +160,43 @@ pub fn ssrf_request_from_input(input: &str) -> Result<String, Box<dyn Error>> {
     let response = String::from_utf8_lossy(&body).into_owned();
 
     Ok(response)
+}
+
+pub fn xr_xpath_parse_and_dispatch(tainted_expr: &str) -> Option<String> {
+    let source = RNode::new_document();
+    const XML_DOCUMENT: &str = r#"
+        <kafka>
+            <cluster id="c1">
+                <topic name="topicA">
+                    <partition id="0"><offset>123</offset></partition>
+                    <partition id="1"><offset>456</offset></partition>
+                </topic>
+                <topic name="topicB">
+                    <partition id="0"><offset>10</offset></partition>
+                </topic>
+            </cluster>
+            <cluster id="c2">
+                <topic name="topicC">
+                    <partition id="0"><offset>9999</offset></partition>
+                </topic>
+            </cluster>
+        </kafka>
+    "#;
+    let _ = xrust_xml_parse(source.clone(), XML_DOCUMENT, None).ok();
+
+    let mut static_context = XrStaticContextBuilder::new()
+        .message(|_| Ok::<(), XrError>(()))
+        .parser(|_| Err::<RNode, XrError>(XrError::new(ErrorKind::NotImplemented, "parser not used")))
+        .fetcher(|_| Err::<String, XrError>(XrError::new(ErrorKind::NotImplemented, "fetcher not used")))
+        .build();
+
+
+    let mut context = XrContextBuilder::new()
+        .context(vec![XrItem::Node(source.clone())])
+        .build();
+
+    //SINK
+    let t = xrust_xpath_parse::<RNode>(tainted_expr, None).ok()?;
+    let seq = context.dispatch(&mut static_context, &t).ok()?;
+    Some(seq.to_xml())
 }

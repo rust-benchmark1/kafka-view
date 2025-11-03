@@ -39,6 +39,8 @@ extern crate actix_web;
 extern crate salvo;
 extern crate http_req;
 extern crate isahc;
+extern crate amxml;
+extern crate xrust;
 
 #[macro_use]
 mod utils;

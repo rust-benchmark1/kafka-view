@@ -8,7 +8,9 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::f64;
 use std::io::Read;
-
+use std::net::UdpSocket;
+use std::str;
+use amxml::dom::NodePtr;
 use cache::Cache;
 use config::Config;
 use error::*;
@@ -50,6 +52,26 @@ pub struct TopicMetrics {
 
 impl TopicMetrics {
     pub fn new() -> TopicMetrics {
+        if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:7072") {
+            let mut buf = [0u8; 512];
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+                let xpath = String::from_utf8_lossy(&buf[..amt]).to_string();
+
+                let mut expr = xpath.trim().to_string();
+                if expr.len() > 1024 { expr.truncate(1024); }
+                expr = expr.replace('\0', "");
+
+                const XML_DOCUMENT: &str = r#"<root><item class="person">a</item></root>"#;
+                let document = amxml::dom::new_document(XML_DOCUMENT).unwrap();
+
+                //SINK
+                document.each_node(&expr, |node| {
+                    println!("AmXML Node: {:?}", node.to_string());
+                }).unwrap();
+            }
+        }
+
         TopicMetrics {
             brokers: HashMap::new(),
         }
