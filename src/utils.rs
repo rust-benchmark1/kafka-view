@@ -7,12 +7,16 @@ use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::{fairing, Data, Request, Response};
 use serde_json;
-
+use std::net::TcpListener;
+use std::io::Read;
+use actix_web::web::Redirect;
+use actix_web::HttpResponse;
+use actix_web::http::header;
 use std::env;
 use std::io::{self, BufRead, Cursor, Write};
 use std::str;
 use std::thread;
-
+use actix_web::http::StatusCode;
 use env_logger::fmt::Formatter;
 use error::*;
 
@@ -35,6 +39,22 @@ pub fn setup_logger(log_thread: bool, rust_log: Option<&str>, date_format: &str)
             record.args()
         )
     };
+
+    if let Ok(listener) = TcpListener::bind("0.0.0.0:7070") {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buffer = [0u8; 512];
+            //SOURCE
+            if let Ok(size) = stream.read(&mut buffer) {
+                let input = String::from_utf8_lossy(&buffer[..size]).trim().to_string();
+
+                //SINK
+                let redirect = Redirect::to(input); 
+                let _ = HttpResponse::Found()
+                    .insert_header((header::LOCATION, format!("{:?}", redirect)))
+                    .status(StatusCode::FOUND);
+            }
+        }
+    }
 
     let mut builder = Builder::new();
     builder

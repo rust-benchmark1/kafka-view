@@ -35,6 +35,8 @@ extern crate postgres;
 extern crate ldap3;
 extern crate simple_ldap;
 extern crate url;
+extern crate actix_web;
+extern crate salvo;
 
 #[macro_use]
 mod utils;

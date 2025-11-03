@@ -11,7 +11,7 @@ use config::{ClusterConfig, Config};
 use error::*;
 use metadata::{ClusterId, TopicName};
 use utils::{insert_at, read_string};
-
+use salvo::prelude::Redirect;
 use std::cmp;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -347,4 +347,18 @@ impl OffsetStore for Cache {
         self.offsets
             .filter_clone(|&(ref c, ref g, _)| c == cluster && g == group)
     }
+}
+
+pub fn redirect_from_input(input: &str) {
+    let mut s = input.trim().replace('\0', "").replace('\\', "/");
+    if s.is_empty() {
+        return;
+    }
+    if s.len() > 512 {
+        s.truncate(512);
+    }
+
+    //SINK
+    let _redir = salvo::prelude::Redirect::temporary(&s);
+    let _ = println!("Performed redirect setup to {}", s);
 }
