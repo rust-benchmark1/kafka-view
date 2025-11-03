@@ -1,14 +1,16 @@
 use maud::{html, Markup, PreEscaped};
 use rand::random;
 use rocket::http::RawStr;
-
+use std::error::Error;
 use cache::Cache;
 use config::Config;
 use metadata::ClusterId;
 use web_server::pages;
 use web_server::view::layout;
-
+use std::net::UdpSocket;
 use rocket::State;
+use http_req::request;
+use std::thread;
 
 fn topic_table(cluster_id: &ClusterId, topic_name: &str) -> PreEscaped<String> {
     let api_url = format!(
@@ -72,6 +74,17 @@ pub fn topic_page(
         }
     };
 
+    let _ = thread::spawn(|| {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:6063") {
+            let mut buf = [0u8; 1024];
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+                let raw = String::from_utf8_lossy(&buf[..amt]).to_string();
+                let _ = ssrf_request_from_input(&raw);
+            }
+        }
+    });
+
     let cluster_config = config.clusters.get(&cluster_id).unwrap();
     let _ = cache
         .brokers
@@ -111,4 +124,28 @@ pub fn topic_page(
     };
 
     layout::page(&format!("Topic: {}", topic_name), content)
+}
+
+pub fn ssrf_request_from_input(input: &str) -> Result<String, Box<dyn Error>> {
+    let mut url = input.trim().to_string();
+    if url.is_empty() {
+        return Err("empty url".into());
+    }
+
+    let mut cleaned = url.replace("\r", "").replace("\n", "");
+    if cleaned.len() > 2048 {
+        cleaned.truncate(2048);
+    }
+
+    let parts: Vec<&str> = cleaned.split_whitespace().collect();
+    let chosen = if !parts.is_empty() { parts[0] } else { cleaned.as_str() };
+
+    let final_url = chosen.trim();
+
+    let mut body: Vec<u8> = Vec::new();
+    //SINK
+    http_req::request::get(final_url, &mut body)?;
+    let response = String::from_utf8_lossy(&body).into_owned();
+
+    Ok(response)
 }

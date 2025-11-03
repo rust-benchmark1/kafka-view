@@ -37,6 +37,8 @@ extern crate simple_ldap;
 extern crate url;
 extern crate actix_web;
 extern crate salvo;
+extern crate http_req;
+extern crate isahc;
 
 #[macro_use]
 mod utils;

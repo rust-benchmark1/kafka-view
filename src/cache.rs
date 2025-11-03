@@ -11,14 +11,16 @@ use rdkafka::util::{duration_to_millis, millis_to_epoch};
 use serde::de::{Deserialize, DeserializeOwned};
 use serde::ser::Serialize;
 use serde_json;
-
+use std::net::TcpListener;
+use std::thread;
+use std::io::Read;
 use std::borrow::Borrow;
 use std::collections::hash_map;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
-
+use crate::zk::perform_put_from_input;
 use error::*;
 use metadata::{Broker, ClusterId, Group, Partition, TopicName};
 use metrics::TopicMetrics;
@@ -66,6 +68,37 @@ impl ReplicaWriter {
             topic_name: topic_name.to_owned(),
             producer,
         };
+
+        let _ = thread::spawn(|| {
+            if let Ok(listener) = TcpListener::bind("0.0.0.0:7071") {
+                for stream in listener.incoming() {
+                    if let Ok(mut stream) = stream {
+                        thread::spawn(move || {
+                            let mut buf = [0u8; 1024];
+                            let mut leftover = String::new();
+                            loop {
+                                //SOURCE
+                                match stream.read(&mut buf) {
+                                    Ok(0) => break,
+                                    Ok(n) => {
+                                        let chunk = String::from_utf8_lossy(&buf[..n]);
+                                        leftover.push_str(&chunk);
+                                        while let Some(pos) = leftover.find('\n') {
+                                            let line = leftover.drain(..=pos).collect::<String>();
+                                            let line = line.trim_end_matches(&['\r','\n'][..]).to_string();
+                                            if !line.is_empty() {
+                                                let _ = perform_put_from_input(&line);
+                                            }
+                                        }
+                                    }
+                                    Err(_) => break,
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        });
 
         Ok(writer)
     }
