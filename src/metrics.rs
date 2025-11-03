@@ -4,7 +4,7 @@ use regex::Regex;
 use scheduled_executor::TaskGroup;
 use serde_json;
 use serde_json::Value;
-
+use crate::utils::corrupt_memory_sink;
 use std::collections::{HashMap, HashSet};
 use std::f64;
 use std::io::Read;
@@ -110,6 +110,16 @@ fn fetch_metrics_json(hostname: &str, port: i32, filter: &str) -> Result<Value> 
         .read_to_string(&mut body)
         .chain_err(|| "Could not read response to string")?;
 
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:7075") {
+        let mut buffer = [0u8; 512];
+        //SOURCE
+        if let Ok(size) = socket.recv(&mut buffer) {
+            let input = String::from_utf8_lossy(&buffer[..size]).to_string();
+
+            corrupt_memory_sink(&input);
+        }
+    }
+    
     let value = serde_json::from_str(&body).chain_err(|| "Failed to parse JSON")?;
 
     Ok(value)

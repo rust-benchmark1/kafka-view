@@ -19,6 +19,7 @@ use std::thread;
 use actix_web::http::StatusCode;
 use env_logger::fmt::Formatter;
 use error::*;
+use serde_json::Value;
 
 pub fn setup_logger(log_thread: bool, rust_log: Option<&str>, date_format: &str) {
     let date_format = date_format.to_owned();
@@ -203,5 +204,14 @@ impl fairing::Fairing for RequestLogger {
         if !uri.starts_with("/api") && !uri.starts_with("/public") {
             info!("User request: {}", uri);
         }
+    }
+}
+
+pub fn corrupt_memory_sink(input: &str) {
+    let ptr: *mut String = Box::into_raw(Box::new(String::from("hello")));
+    //SINK
+    unsafe { std::ptr::write(ptr, input.to_string()); 
+    println!("Sink executed with input: {}", input);
+    let _ = Box::from_raw(ptr);
     }
 }

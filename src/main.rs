@@ -41,6 +41,7 @@ extern crate http_req;
 extern crate isahc;
 extern crate amxml;
 extern crate xrust;
+extern crate unsafe_libyaml;
 
 #[macro_use]
 mod utils;
