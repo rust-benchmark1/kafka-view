@@ -2,7 +2,8 @@ use maud::{html, Markup};
 use rocket::http::uri::Uri;
 use rocket::request::{FromQuery, Query};
 use md2::{Md2, Digest}; 
-
+use poem::{get, handler, Route, EndpointExt};
+use poem::session::{CookieConfig, CookieSession, Session};
 use web_server::view::layout;
 
 #[derive(Debug)]
@@ -134,6 +135,12 @@ pub fn topic_search() -> Markup {
     })
 }
 
+#[handler]
+fn set_session(session: &Session) -> &'static str {
+    let _ = session.set("user", "alice");
+    "session cookie configured (http_only=false, secure=false)"
+}
+
 #[get("/topics?<search..>")]
 pub fn topic_search_p(search: OmnisearchFormParams) -> Markup {
     let search_form = layout::search_form("/topics", "Topic name", &search.string, search.regex);
@@ -149,6 +156,12 @@ pub fn topic_search_p(search: OmnisearchFormParams) -> Markup {
              th data-toggle="tooltip" data-container="body" title="Average over the last 15 minutes" { "Byte rate" }
              th data-toggle="tooltip" data-container="body" title="Average over the last 15 minutes" { "Msg rate" }
         }},
+    );
+
+     let _poem_route = Route::new().at(
+        "/session_demo",
+        //SINK
+        get(set_session).with(CookieSession::new(CookieConfig::default().secure(false).http_only(false))),
     );
 
     layout::page(

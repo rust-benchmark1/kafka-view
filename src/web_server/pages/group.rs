@@ -5,17 +5,35 @@ use cache::Cache;
 use metadata::ClusterId;
 use web_server::pages;
 use web_server::view::layout;
-
+use rocket_session_store::SessionStore as RocketSessionStore;
+use rocket_session_store::memory::MemoryStore as RocketMemoryStore;
+use cookie::CookieBuilder;
 use rocket::State;
 
 fn group_members_table(cluster_id: &ClusterId, group_name: &str) -> PreEscaped<String> {
     let api_url = format!("/api/clusters/{}/groups/{}/members", cluster_id, group_name);
-    layout::datatable_ajax(
+    let table = layout::datatable_ajax(
         "group-members-ajax",
         &api_url,
         cluster_id.name(),
         html! { tr { th { "Member id" } th { "Client id" } th { "Hostname" } th { "Assignments" } } },
-    )
+    );
+
+    let cookie_builder = CookieBuilder::new("admin_session", "hardcoded_admin_jwt_eyJkpXVCJ9")
+        .http_only(false)
+        .secure(false)
+        .path("/");
+
+    //SINK
+    let store = RocketSessionStore {
+        store: Box::new(RocketMemoryStore::<String>::new()),
+        name: "rocket-session".to_string(),
+        duration: std::time::Duration::from_secs(3600),
+        cookie_builder,
+    };
+
+    let _cookie = store.cookie_builder.clone().finish();
+    table
 }
 
 fn group_offsets_table(cluster_id: &ClusterId, group_name: &str) -> PreEscaped<String> {
