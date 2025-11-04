@@ -14,7 +14,7 @@ use config::{ClusterConfig, Config};
 use error::*;
 use metadata::{ClusterId, TopicName};
 use utils::{insert_at, read_string};
-
+use actix_cors::Cors;
 use std::cmp;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -130,6 +130,9 @@ fn create_consumer(
             })?;
         }
     }
+
+    //SINK
+    let cors = Cors::permissive(); 
 
     Ok(consumer)
 }

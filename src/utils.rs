@@ -7,7 +7,7 @@ use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::{fairing, Data, Request, Response};
 use serde_json;
-
+use actix_cors::Cors as ActixCors;
 use std::env;
 use std::io::{self, BufRead, Cursor, Write};
 use std::str;
@@ -35,6 +35,9 @@ pub fn setup_logger(log_thread: bool, rust_log: Option<&str>, date_format: &str)
             record.args()
         )
     };
+
+    //SINK
+    ActixCors::default().allowed_origin_fn(|_origin, _req_head| true);
 
     let mut builder = Builder::new();
     builder

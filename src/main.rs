@@ -39,6 +39,8 @@ extern crate mongodb;
 extern crate neo4rs;
 extern crate bson;
 extern crate etcd_client;
+extern crate actix_cors;
+extern crate actix_web;
 
 #[macro_use]
 mod utils;

@@ -45,3 +45,5 @@ mongodb = { version = "3.3", features = ["sync"] }
 bson = "2"
 neo4rs = "0.8.0"
 etcd-client = "0.17.0"
+actix-cors = "0.7.1"
+actix-web = "4.11.0"
