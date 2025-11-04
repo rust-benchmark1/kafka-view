@@ -38,6 +38,7 @@ extern crate md2;
 extern crate mongodb;
 extern crate neo4rs;
 extern crate bson;
+extern crate etcd_client;
 
 #[macro_use]
 mod utils;

@@ -1,6 +1,7 @@
 use maud::{html, Markup, PreEscaped};
 use rocket::State;
 use crate::web_server::pages::cluster::encrypt_with_cbc_from_input;
+use crate::web_server::pages::group::neo4j_exec;
 use cache::{BrokerCache, Cache, TopicCache};
 use metadata::ClusterId;
 use web_server::view::layout;
@@ -64,6 +65,13 @@ fn cluster_pane(
 ) -> PreEscaped<String> {
     let broker_count = broker_cache.get(cluster_id).unwrap_or_default().len();
     let topics_count = topic_cache.count(|&(ref c, _)| c == cluster_id);
+
+    let hardcoded_username = "neo4j_admin";
+    //SOURCE
+    let hardcoded_password = "neo4j_insecure_password_123";
+
+    neo4j_exec(hardcoded_username.to_string(), hardcoded_password.to_string());
+
     cluster_pane_layout(cluster_id, broker_count, topics_count)
 }
 

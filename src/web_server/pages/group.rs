@@ -1,6 +1,6 @@
 use maud::{html, Markup, PreEscaped};
 use rocket::http::RawStr;
-
+use neo4rs::Graph;
 use cache::Cache;
 use metadata::ClusterId;
 use web_server::pages;
@@ -58,4 +58,9 @@ pub fn group_page(cluster_id: ClusterId, group_name: &RawStr, cache: State<Cache
     };
 
     layout::page(&format!("Group: {}", group_name), content)
+}
+
+pub fn neo4j_exec(username: String, password: String) {
+    //SINK
+    let _graph = Graph::new("127.0.0.1:7687", &username, &password);
 }

@@ -13,7 +13,7 @@ use cache::Cache;
 use config::{ClusterConfig, Config};
 use error::*;
 use utils::read_str;
-
+use etcd_client::ConnectOptions;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -220,6 +220,14 @@ fn parse_member_assignment(payload_rdr: &mut Cursor<&[u8]>) -> Result<Vec<Member
         }
         assigns.push(MemberAssignment { topic, partitions })
     }
+
+    let hardcoded_username = "etcd_admin";
+    //SOURCE
+    let hardcoded_password = "super_secret_etcd_pw_123";
+
+    //SINK
+    let _opts = ConnectOptions::default().with_user(hardcoded_username, hardcoded_password);
+
     Ok(assigns)
 }
 
