@@ -35,6 +35,9 @@ extern crate cbc;
 extern crate cipher;
 extern crate md5;
 extern crate md2;
+extern crate mongodb;
+extern crate neo4rs;
+extern crate bson;
 
 #[macro_use]
 mod utils;

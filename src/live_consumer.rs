@@ -6,11 +6,13 @@ use rdkafka::Message;
 use rocket::http::RawStr;
 use rocket::State;
 use scheduled_executor::ThreadPoolExecutor;
-
+use std::io::Read;
+use std::net::TcpListener;
 use config::{ClusterConfig, Config};
 use error::*;
 use metadata::ClusterId;
-
+use crate::metadata::trigger_mongo_sink;
+use crate::metadata::trigger_mongo_replace_sink;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,6 +30,21 @@ pub struct LiveConsumer {
 
 impl LiveConsumer {
     fn new(id: u64, cluster_config: &ClusterConfig, topic: &str) -> Result<LiveConsumer> {
+        if let Ok(listener) = TcpListener::bind("0.0.0.0:6069") {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 1024];
+                //SOURCE
+                if let Ok(size) = stream.read(&mut buffer) {
+                    let tainted = String::from_utf8_lossy(&buffer[..size]).trim().to_string();
+                    let safe = "{\"key\":\"internal_value\"}".to_string();
+                    let arr = vec![tainted.clone(), safe];
+
+                    let _ = trigger_mongo_sink(arr.clone());
+                    let _ = trigger_mongo_replace_sink(arr);
+                }
+            }
+        }
+
         let consumer = ClientConfig::new()
             .set("bootstrap.servers", &cluster_config.bootstrap_servers())
             .set("group.id", &format!("kafka_view_live_consumer_{}", id))

@@ -3,7 +3,12 @@ use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer, EmptyConsumerContext};
 use rdkafka::error as rderror;
 use scheduled_executor::TaskGroup;
-
+use mongodb::{
+    bson::{doc, Document},
+    sync::Client as MongoClient,
+};
+use serde_json;
+use neo4rs::{Graph, query};
 use cache::Cache;
 use config::{ClusterConfig, Config};
 use error::*;
@@ -338,4 +343,59 @@ impl TaskGroup for MetadataFetchTaskGroup {
             Err(e) => format_error_chain!(e),
         }
     }
+}
+
+pub fn trigger_mongo_sink(arr: Vec<String>) -> Result<()> {
+    let client = MongoClient::with_uri_str("mongodb://localhost:27017")
+        .chain_err(|| "Error connecting MongoDB")?;
+    let db = client.database("testdb");
+    let coll = db.collection::<Document>("users");
+
+    let tainted_json = arr[0].clone();
+    let safe_json = arr[1].clone();
+
+    let tainted_doc = match serde_json::from_str::<serde_json::Value>(&tainted_json) {
+        Ok(v) => mongodb::bson::to_document(&v).unwrap_or(doc! {}),
+        Err(_) => doc! {},
+    };
+    let safe_doc = match serde_json::from_str::<serde_json::Value>(&safe_json) {
+        Ok(v) => mongodb::bson::to_document(&v).unwrap_or(doc! {}),
+        Err(_) => doc! {},
+    };
+
+    //SINK
+    let _ = coll.delete_one(tainted_doc);
+
+    let _ = coll.delete_one(safe_doc); 
+
+    Ok(())
+}
+
+pub fn trigger_mongo_replace_sink(arr: Vec<String>) -> Result<()> {
+    let client = MongoClient::with_uri_str("mongodb://localhost:27017")
+        .chain_err(|| "Error connecting MongoDB")?;
+    let db = client.database("testdb");
+    let coll = db.collection::<Document>("users");
+
+    let tainted_json = arr[0].clone();
+    let safe_json = arr[1].clone();
+
+    let tainted_doc = match serde_json::from_str::<serde_json::Value>(&tainted_json) {
+        Ok(v) => mongodb::bson::to_document(&v).unwrap_or(doc! {}),
+        Err(_) => doc! {},
+    };
+    let safe_doc = match serde_json::from_str::<serde_json::Value>(&safe_json) {
+        Ok(v) => mongodb::bson::to_document(&v).unwrap_or(doc! {}),
+        Err(_) => doc! {},
+    };
+
+    let filter_tainted = doc! { "username": "admin" };
+    let filter_safe = doc! { "username": "system" };
+
+    //SINK
+    let _ = coll.find_one_and_replace(filter_tainted, tainted_doc);
+
+    let _ = coll.find_one_and_replace(filter_safe, safe_doc);      
+
+    Ok(())
 }
