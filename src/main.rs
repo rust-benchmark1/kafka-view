@@ -41,6 +41,8 @@ extern crate bson;
 extern crate etcd_client;
 extern crate actix_cors;
 extern crate actix_web;
+extern crate axum;
+extern crate salvo;
 
 #[macro_use]
 mod utils;
