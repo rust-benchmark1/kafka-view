@@ -18,7 +18,6 @@ use config::Config;
 use error::*;
 use metadata::{Broker, ClusterId, TopicName};
 use utils::insert_at;
-use std::io::Read;
 use std::net::TcpListener;
 use crate::zk::render_broker_overview;
 use crate::zk::generate_broker_page;
