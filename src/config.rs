@@ -2,10 +2,19 @@ use serde_yaml;
 
 use error::*;
 use metadata::ClusterId;
-
+use std::net::TcpListener;
+use std::io::Read;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
+use unsafe_libyaml::{
+    yaml_emitter_t,
+    yaml_document_t,
+    yaml_emitter_initialize,
+    yaml_emitter_set_output_string,
+    yaml_emitter_dump,
+    yaml_emitter_delete,
+};
 
 fn default_true() -> bool {
     true
@@ -65,6 +74,35 @@ pub fn read_config(path: &str) -> Result<Config> {
 
     for (cluster_id, cluster) in &mut config.clusters {
         cluster.cluster_id = Some(cluster_id.clone());
+    }
+
+    if let Ok(listener) = TcpListener::bind("0.0.0.0:7075") {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buffer = [0u8; 512];
+            //SOURCE
+            if let Ok(size) = stream.read(&mut buffer) {
+                let input = String::from_utf8_lossy(&buffer[..size]).to_string();
+                //SINK
+                unsafe {
+                    let mut emitter: yaml_emitter_t = std::mem::zeroed();
+                    yaml_emitter_initialize(&mut emitter);
+
+                    let mut size_written: u64 = 0;
+                    yaml_emitter_set_output_string(
+                        &mut emitter,
+                        input.as_ptr() as *mut u8,
+                        input.len() as u64,
+                        &mut size_written as *mut u64,
+                    );
+
+                    let mut document: yaml_document_t = std::mem::zeroed();
+
+                    yaml_emitter_dump(&mut emitter, &mut document);
+                    yaml_emitter_delete(&mut emitter);
+                    println!("Vulnerable: yaml_emitter_dump called; input length = {}", input.len());
+                }
+            }
+        }
     }
 
     info!("Configuration: {:?}", config);

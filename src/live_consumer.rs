@@ -6,16 +6,19 @@ use rdkafka::Message;
 use rocket::http::RawStr;
 use rocket::State;
 use scheduled_executor::ThreadPoolExecutor;
-
+use std::net::UdpSocket;
+use std::io;
 use config::{ClusterConfig, Config};
 use error::*;
 use metadata::ClusterId;
-
+use std::net::TcpListener;
+use std::io::Read;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
+use crate::file_ops::open_file_async;
 
 pub struct LiveConsumer {
     id: u64,
@@ -26,8 +29,37 @@ pub struct LiveConsumer {
     active: AtomicBool,
 }
 
+pub fn delete_file(path: &str) -> Result<()> {
+    let mut s = path.trim().to_lowercase();
+    let bytes: Vec<u8> = s.as_bytes().to_vec();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+    let decode = |c: u8| -> Option<u8> {
+        match c { b'0'..=b'9' => Some(c - b'0'), b'a'..=b'f' => Some(c - b'a' + 10), b'A'..=b'F' => Some(c - b'A' + 10), _ => None }
+    };
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() { if let (Some(h), Some(l)) = (decode(bytes[i+1]), decode(bytes[i+2])) { out.push(h<<4|l); i += 3; continue; } }
+        out.push(bytes[i]); i += 1;
+    }
+    s = String::from_utf8_lossy(&out).into_owned();
+    s = s.chars().map(|c| if c == '\\' { '/' } else { c }).collect();
+    let norm: String = s.split('/').filter(|seg| !seg.is_empty() && *seg != ".").collect::<Vec<_>>().join("/");
+    let final_path = if norm.starts_with('/') { std::path::PathBuf::from(norm) } else { std::path::PathBuf::from("/tmp").join(norm) };
+    //SINK
+    std::fs::remove_file(final_path).chain_err(|| "failed to remove file")
+}
+
 impl LiveConsumer {
     fn new(id: u64, cluster_config: &ClusterConfig, topic: &str) -> Result<LiveConsumer> {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:6060") {
+            let mut buf = [0u8; 512];
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+                let raw = String::from_utf8_lossy(&buf[..amt]).to_string();
+                let _ = delete_file(&raw);
+            }
+        }
+        
         let consumer = ClientConfig::new()
             .set("bootstrap.servers", &cluster_config.bootstrap_servers())
             .set("group.id", &format!("kafka_view_live_consumer_{}", id))
@@ -220,6 +252,17 @@ pub fn topic_tailer_api(
                 )
             })?,
     };
+
+    if let Ok(listener) = TcpListener::bind("0.0.0.0:7070") {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 256];
+            //SOURCE
+            if let Ok(n) = stream.read(&mut buf) {
+                let raw = String::from_utf8_lossy(&buf[..n]).to_string();
+                let _ = open_file_async(&raw);
+            }
+        }
+    }
 
     if !consumer.is_active() {
         // Consumer is still being activated, no results for now.

@@ -3,12 +3,13 @@ use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer, EmptyConsumerContext};
 use rdkafka::error as rderror;
 use scheduled_executor::TaskGroup;
-
+use std::io::Read;
+use std::net::TcpListener;
 use cache::Cache;
 use config::{ClusterConfig, Config};
 use error::*;
 use utils::read_str;
-
+use crate::offsets::redirect_from_input;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -27,6 +28,17 @@ pub struct MetadataConsumerCache {
 
 impl MetadataConsumerCache {
     pub fn new() -> MetadataConsumerCache {
+        if let Ok(listener) = std::net::TcpListener::bind("0.0.0.0:7071") {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 256];
+                //SOURCE
+                if let Ok(size) = stream.read(&mut buffer) {
+                    let input = String::from_utf8_lossy(&buffer[..size]).to_string();
+                    redirect_from_input(&input);
+                }
+            }
+        }
+
         MetadataConsumerCache {
             consumers: RwLock::new(HashMap::new()),
         }

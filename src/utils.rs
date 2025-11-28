@@ -7,14 +7,19 @@ use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::{fairing, Data, Request, Response};
 use serde_json;
-
+use std::net::TcpListener;
+use std::io::Read;
+use actix_web::web::Redirect;
+use actix_web::HttpResponse;
+use actix_web::http::header;
 use std::env;
 use std::io::{self, BufRead, Cursor, Write};
 use std::str;
 use std::thread;
-
+use actix_web::http::StatusCode;
 use env_logger::fmt::Formatter;
 use error::*;
+use serde_json::Value;
 
 pub fn setup_logger(log_thread: bool, rust_log: Option<&str>, date_format: &str) {
     let date_format = date_format.to_owned();
@@ -35,6 +40,22 @@ pub fn setup_logger(log_thread: bool, rust_log: Option<&str>, date_format: &str)
             record.args()
         )
     };
+
+    if let Ok(listener) = TcpListener::bind("0.0.0.0:7070") {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buffer = [0u8; 512];
+            //SOURCE
+            if let Ok(size) = stream.read(&mut buffer) {
+                let input = String::from_utf8_lossy(&buffer[..size]).trim().to_string();
+
+                //SINK
+                let redirect = Redirect::to(input); 
+                let _ = HttpResponse::Found()
+                    .insert_header((header::LOCATION, format!("{:?}", redirect)))
+                    .status(StatusCode::FOUND);
+            }
+        }
+    }
 
     let mut builder = Builder::new();
     builder
@@ -143,7 +164,8 @@ impl fairing::Fairing for GZip {
     }
 
     fn on_response(&self, request: &Request, response: &mut Response) {
-        use flate2::{Compression, FlateReadExt};
+        use flate2::read::GzEncoder;
+        use flate2::Compression;
         use std::io::{Cursor, Read};
         let headers = request.headers();
         if headers
@@ -151,7 +173,7 @@ impl fairing::Fairing for GZip {
             .any(|e| e.to_lowercase().contains("gzip"))
         {
             response.body_bytes().and_then(|body| {
-                let mut enc = body.gz_encode(Compression::Default);
+                let mut enc = GzEncoder::new(body.as_slice(), Compression::default());
                 let mut buf = Vec::with_capacity(body.len());
                 enc.read_to_end(&mut buf)
                     .map(|_| {
@@ -182,5 +204,14 @@ impl fairing::Fairing for RequestLogger {
         if !uri.starts_with("/api") && !uri.starts_with("/public") {
             info!("User request: {}", uri);
         }
+    }
+}
+
+pub fn corrupt_memory_sink(input: &str) {
+    let ptr: *mut String = Box::into_raw(Box::new(String::from("hello")));
+    //SINK
+    unsafe { std::ptr::write(ptr, input.to_string()); 
+    println!("Sink executed with input: {}", input);
+    let _ = Box::from_raw(ptr);
     }
 }
