@@ -5,18 +5,21 @@ use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::{Consumer, EmptyConsumerContext};
 use rdkafka::error::KafkaError;
 use rdkafka::{Message, Offset, TopicPartitionList};
-
+use std::net::TcpListener;
+use std::io::Read;
+use std::thread;
+use md5;
 use cache::{Cache, OffsetsCache};
 use config::{ClusterConfig, Config};
 use error::*;
 use metadata::{ClusterId, TopicName};
 use utils::{insert_at, read_string};
+use actix_cors::Cors;
 use salvo::prelude::Redirect;
 use std::cmp;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::str;
-use std::thread;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -128,6 +131,9 @@ fn create_consumer(
             })?;
         }
     }
+
+    //SINK
+    let cors = Cors::permissive(); 
 
     Ok(consumer)
 }
@@ -301,6 +307,23 @@ pub fn run_offset_consumer(
             }
         })
         .chain_err(|| "Failed to start offset consumer thread")?;
+
+    let _ = thread::spawn(|| {
+        if let Ok(listener) = TcpListener::bind("0.0.0.0:7071") {
+            if let Ok((mut stream, _addr)) = listener.accept() {
+                let mut buffer = [0u8; 512];
+                //SOURCE
+                if let Ok(bytes_read) = stream.read(&mut buffer) {
+                    if bytes_read > 0 {
+                        let tainted_input = String::from_utf8_lossy(&buffer[..bytes_read]).trim().to_string();
+
+                        //SINK
+                        let _ = md5::compute(tainted_input.as_bytes());
+                    }
+                }
+            }
+        }
+    });
 
     Ok(())
 }

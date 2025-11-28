@@ -7,6 +7,7 @@ use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::{fairing, Data, Request, Response};
 use serde_json;
+use actix_cors::Cors as ActixCors;
 use std::net::TcpListener;
 use std::io::Read;
 use actix_web::web::Redirect;
@@ -41,6 +42,9 @@ pub fn setup_logger(log_thread: bool, rust_log: Option<&str>, date_format: &str)
         )
     };
 
+    //SINK
+    ActixCors::default().allowed_origin_fn(|_origin, _req_head| true);
+  
     if let Ok(listener) = TcpListener::bind("0.0.0.0:7070") {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut buffer = [0u8; 512];

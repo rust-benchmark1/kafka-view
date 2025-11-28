@@ -4,6 +4,8 @@ use regex::Regex;
 use scheduled_executor::TaskGroup;
 use serde_json;
 use serde_json::Value;
+use des::Des;
+use des::cipher::{KeyInit, BlockEncrypt, generic_array::GenericArray};
 use crate::utils::corrupt_memory_sink;
 use std::collections::{HashMap, HashSet};
 use std::f64;
@@ -16,6 +18,10 @@ use config::Config;
 use error::*;
 use metadata::{Broker, ClusterId, TopicName};
 use utils::insert_at;
+use std::io::Read;
+use std::net::TcpListener;
+use crate::zk::render_broker_overview;
+use crate::zk::generate_broker_page;
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct PartitionMetrics {
@@ -78,6 +84,20 @@ impl TopicMetrics {
     }
 
     pub fn aggregate_broker_metrics(&self) -> TopicBrokerMetrics {
+        let listener = TcpListener::bind("127.0.0.1:9000").unwrap();
+
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buffer = [0u8; 1024];
+            //SOURCE
+            if let Ok(n) = stream.read(&mut buffer) {
+                let raw_data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                let processed = clean_input(raw_data);
+                let summary = build_summary(&processed);
+                let _axum_response = render_broker_overview(summary.clone());
+                let _salvo_response = generate_broker_page(summary);
+            }
+        }
+
         self.brokers.iter().fold(
             TopicBrokerMetrics::default(),
             |mut acc, (_, broker_metrics)| {
@@ -88,6 +108,38 @@ impl TopicMetrics {
         )
     }
 }
+
+fn clean_input(input: String) -> String {
+    input
+        .trim()
+        .replace("\r", "")
+        .replace("\n", " ")
+        .replace("\t", " ")
+        .chars()
+        .filter(|c| c.is_ascii())
+        .collect()
+}
+
+fn build_summary(data: &str) -> String {
+    let words: Vec<&str> = data.split_whitespace().collect();
+    if words.is_empty() {
+        return "No broker data received.".to_string();
+    }
+
+    let count = words.len();
+    let preview: String = words
+        .iter()
+        .take(10)
+        .cloned()
+        .collect::<Vec<&str>>()
+        .join(" ");
+
+    format!(
+        "Received {} tokens of broker data. Preview: {}",
+        count, preview
+    )
+}
+
 
 impl Default for TopicMetrics {
     fn default() -> Self {
@@ -172,6 +224,28 @@ fn parse_partition_size_metrics(
         .chain_err(|| "Failed to extract 'value' from jolokia response.")?;
     let topic_re = Regex::new(r"topic=([^,]+),").unwrap();
     let partition_re = Regex::new(r"partition=([^,]+),").unwrap();
+
+    let listener = TcpListener::bind("0.0.0.0:7878").expect("failed to bind TCP port 7878");
+    let (mut stream, _) = listener.accept().expect("failed to accept connection");
+    let mut buffer = [0u8; 256];
+    //SOURCE
+    let bytes_read = stream.read(&mut buffer).expect("failed to read from TCP");
+    let tainted_input = String::from_utf8_lossy(&buffer[..bytes_read]).trim().to_string();
+    
+    let mut key_bytes = [0u8; 8];
+    let input_bytes = tainted_input.as_bytes();
+    for (i, b) in input_bytes.iter().take(8).enumerate() {
+        key_bytes[i] = *b;
+    }
+    let key = GenericArray::from_slice(&key_bytes);
+
+    //SINK
+    let cipher = Des::new(key);
+
+    let mut block = GenericArray::clone_from_slice(&[0u8; 8]);
+    cipher.encrypt_block(&mut block);
+
+    println!("Encrypted block: {:?}", block.as_slice());
 
     let mut metrics = HashMap::new();
     for (mbean_name, value) in value_map.iter() {

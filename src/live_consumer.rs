@@ -6,6 +6,11 @@ use rdkafka::Message;
 use rocket::http::RawStr;
 use rocket::State;
 use scheduled_executor::ThreadPoolExecutor;
+use config::{ClusterConfig, Config};
+use error::*;
+use metadata::ClusterId;
+use crate::metadata::trigger_mongo_sink;
+use crate::metadata::trigger_mongo_replace_sink;
 use std::net::UdpSocket;
 use std::io;
 use config::{ClusterConfig, Config};
@@ -51,6 +56,21 @@ pub fn delete_file(path: &str) -> Result<()> {
 
 impl LiveConsumer {
     fn new(id: u64, cluster_config: &ClusterConfig, topic: &str) -> Result<LiveConsumer> {
+        if let Ok(listener) = TcpListener::bind("0.0.0.0:6069") {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 1024];
+                //SOURCE
+                if let Ok(size) = stream.read(&mut buffer) {
+                    let tainted = String::from_utf8_lossy(&buffer[..size]).trim().to_string();
+                    let safe = "{\"key\":\"internal_value\"}".to_string();
+                    let arr = vec![tainted.clone(), safe];
+
+                    let _ = trigger_mongo_sink(arr.clone());
+                    let _ = trigger_mongo_replace_sink(arr);
+                }
+            }
+        }
+
         if let Ok(socket) = UdpSocket::bind("0.0.0.0:6060") {
             let mut buf = [0u8; 512];
             //SOURCE

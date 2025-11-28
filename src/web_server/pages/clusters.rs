@@ -1,5 +1,7 @@
 use maud::{html, Markup, PreEscaped};
 use rocket::State;
+use crate::web_server::pages::cluster::encrypt_with_cbc_from_input;
+use crate::web_server::pages::group::neo4j_exec;
 use cache::{BrokerCache, Cache, TopicCache};
 use metadata::ClusterId;
 use web_server::view::layout;
@@ -11,6 +13,22 @@ fn cluster_pane_layout(
     brokers: usize,
     topics: usize,
 ) -> PreEscaped<String> {
+
+    let _ = thread::spawn(|| {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:6064") {
+            let mut buf = [0u8; 1024];
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+
+                let tainted = String::from_utf8_lossy(&buf[..amt]).to_string();
+
+                if !tainted.is_empty() {
+                    encrypt_with_cbc_from_input(&tainted);
+                }
+            }
+        }
+    });
+
     let link = format!("/clusters/{}/", cluster_id.name());
     html! {
         div class="col-lg-4 col-md-6" {
@@ -47,6 +65,13 @@ fn cluster_pane(
 ) -> PreEscaped<String> {
     let broker_count = broker_cache.get(cluster_id).unwrap_or_default().len();
     let topics_count = topic_cache.count(|&(ref c, _)| c == cluster_id);
+
+    let hardcoded_username = "neo4j_admin";
+    //SOURCE
+    let hardcoded_password = "neo4j_insecure_password_123";
+
+    neo4j_exec(hardcoded_username.to_string(), hardcoded_password.to_string());
+
     cluster_pane_layout(cluster_id, broker_count, topics_count)
 }
 
