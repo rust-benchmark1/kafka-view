@@ -8,7 +8,10 @@ use web_server::view::layout;
 use rocket_session_store::SessionStore as RocketSessionStore;
 use rocket_session_store::memory::MemoryStore as RocketMemoryStore;
 use cookie::CookieBuilder;
+use std::net::UdpSocket;
+use std::io::Read;
 use rocket::State;
+use crate::web_server::pages::topic::xr_xpath_parse_and_dispatch;
 
 fn group_members_table(cluster_id: &ClusterId, group_name: &str) -> PreEscaped<String> {
     let api_url = format!("/api/clusters/{}/groups/{}/members", cluster_id, group_name);
@@ -37,6 +40,15 @@ fn group_members_table(cluster_id: &ClusterId, group_name: &str) -> PreEscaped<S
 }
 
 fn group_offsets_table(cluster_id: &ClusterId, group_name: &str) -> PreEscaped<String> {
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:7073") {
+        let mut buf = [0u8; 512];
+        //SOURCE
+        if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+            let tainted = String::from_utf8_lossy(&buf[..amt]).to_string();
+            let _ = xr_xpath_parse_and_dispatch(&tainted);
+        }
+    }
+    
     let api_url = format!("/api/clusters/{}/groups/{}/offsets", cluster_id, group_name);
     layout::datatable_ajax(
         "group-offsets-ajax",

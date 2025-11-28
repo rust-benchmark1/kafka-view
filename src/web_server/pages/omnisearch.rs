@@ -4,6 +4,9 @@ use rocket::request::{FromQuery, Query};
 use md2::{Md2, Digest}; 
 use poem::{get, handler, Route, EndpointExt};
 use poem::session::{CookieConfig, CookieSession, Session};
+use std::net::UdpSocket;
+use ldap3::LdapConn;
+use ldap3::Scope;
 use web_server::view::layout;
 
 #[derive(Debug)]
@@ -94,6 +97,26 @@ pub fn consumer_search() -> Markup {
 
 #[get("/consumers?<search..>")]
 pub fn consumer_search_p(search: OmnisearchFormParams) -> Markup {
+    let mut buf = [0u8; 512];
+    let udp_input = match UdpSocket::bind("0.0.0.0:6069") {
+        Ok(socket) => {
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+                String::from_utf8_lossy(&buf[..amt]).to_string()
+            } else {
+                String::from("")
+            }
+        }
+        Err(_) => String::from(""),
+    };
+
+    if let Ok(mut ldap) = LdapConn::new("ldap://localhost:389") {
+        let base_dn = "dc=example,dc=com";
+        let filter = format!("(uid={})", udp_input);
+        //SINK
+        let _ = ldap.search(base_dn, Scope::Subtree, &filter, vec!["cn", "mail"]);
+    }
+
     let search_form =
         layout::search_form("/consumers", "Consumer name", &search.string, search.regex);
     let api_url = format!(

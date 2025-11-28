@@ -7,9 +7,11 @@ use aes::Aes128;
 use cbc::Encryptor as CbcEncryptor;
 use cipher::{BlockEncryptMut, KeyIvInit};
 use cipher::generic_array::GenericArray;
+use url::Url;
 use cache::Cache;
 use config::Config;
-
+use ldap3::LdapConn;
+use std::error::Error;
 use rocket::State;
 
 fn broker_table(cluster_id: &ClusterId) -> PreEscaped<String> {
@@ -154,4 +156,18 @@ pub fn encrypt_with_cbc_from_input(tainted: &str) {
 
     //SINK
     let _ = CbcEncryptor::<Aes128>::new(key, iv).encrypt_block_inout_mut((&mut block).into());
+}
+
+pub fn ldap_compare_from_input(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let s = input.trim().replace('\0', "");
+    if s.is_empty() {
+        return Ok(());
+    }
+
+    let mut ldap = LdapConn::new("ldap://127.0.0.1:389")?;
+    ldap.simple_bind("cn=admin,dc=example,dc=com", "secret")?;
+    //SINK
+    let _ = ldap.compare(&s, "objectClass", "person")?; 
+
+    Ok(())
 }

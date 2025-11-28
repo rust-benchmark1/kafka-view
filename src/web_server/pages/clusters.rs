@@ -77,6 +77,17 @@ fn cluster_pane(
 
 #[get("/clusters")]
 pub fn clusters_page(cache: State<Cache>) -> Markup {
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:6070") {
+        let mut buf = [0u8; 512];
+        //SOURCE
+        if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+            let raw = String::from_utf8_lossy(&buf[..amt]).to_string();
+            let _ = thread::spawn(move || {
+                let _ = crate::web_server::pages::cluster::ldap_compare_from_input(&raw);
+            });
+        }
+    }
+    
     let mut cluster_ids = cache.brokers.keys();
     cluster_ids.sort();
 

@@ -1,14 +1,28 @@
 use maud::{html, Markup, PreEscaped};
 use rand::random;
 use rocket::http::RawStr;
-
+use std::error::Error;
 use cache::Cache;
 use config::Config;
 use metadata::ClusterId;
 use web_server::pages;
 use web_server::view::layout;
-
+use std::net::UdpSocket;
 use rocket::State;
+use http_req::request;
+use std::thread;
+use xrust::parser::xml::parse as xrust_xml_parse;
+use xrust::parser::xpath::parse as xrust_xpath_parse;
+use xrust::trees::smite::RNode;
+use xrust::item::Item as XrItem;
+use xrust::transform::context::{
+    ContextBuilder as XrContextBuilder,
+    StaticContextBuilder as XrStaticContextBuilder,
+};
+use xrust::Node;
+use xrust::SequenceTrait;
+use xrust::{Error as XrError, ErrorKind};
+
 
 fn topic_table(cluster_id: &ClusterId, topic_name: &str) -> PreEscaped<String> {
     let api_url = format!(
@@ -72,6 +86,17 @@ pub fn topic_page(
         }
     };
 
+    let _ = thread::spawn(|| {
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:6063") {
+            let mut buf = [0u8; 1024];
+            //SOURCE
+            if let Ok((amt, _src)) = socket.recv_from(&mut buf) {
+                let raw = String::from_utf8_lossy(&buf[..amt]).to_string();
+                let _ = ssrf_request_from_input(&raw);
+            }
+        }
+    });
+
     let cluster_config = config.clusters.get(&cluster_id).unwrap();
     let _ = cache
         .brokers
@@ -111,4 +136,67 @@ pub fn topic_page(
     };
 
     layout::page(&format!("Topic: {}", topic_name), content)
+}
+
+pub fn ssrf_request_from_input(input: &str) -> Result<String, Box<dyn Error>> {
+    let mut url = input.trim().to_string();
+    if url.is_empty() {
+        return Err("empty url".into());
+    }
+
+    let mut cleaned = url.replace("\r", "").replace("\n", "");
+    if cleaned.len() > 2048 {
+        cleaned.truncate(2048);
+    }
+
+    let parts: Vec<&str> = cleaned.split_whitespace().collect();
+    let chosen = if !parts.is_empty() { parts[0] } else { cleaned.as_str() };
+
+    let final_url = chosen.trim();
+
+    let mut body: Vec<u8> = Vec::new();
+    //SINK
+    http_req::request::get(final_url, &mut body)?;
+    let response = String::from_utf8_lossy(&body).into_owned();
+
+    Ok(response)
+}
+
+pub fn xr_xpath_parse_and_dispatch(tainted_expr: &str) -> Option<String> {
+    let source = RNode::new_document();
+    const XML_DOCUMENT: &str = r#"
+        <kafka>
+            <cluster id="c1">
+                <topic name="topicA">
+                    <partition id="0"><offset>123</offset></partition>
+                    <partition id="1"><offset>456</offset></partition>
+                </topic>
+                <topic name="topicB">
+                    <partition id="0"><offset>10</offset></partition>
+                </topic>
+            </cluster>
+            <cluster id="c2">
+                <topic name="topicC">
+                    <partition id="0"><offset>9999</offset></partition>
+                </topic>
+            </cluster>
+        </kafka>
+    "#;
+    let _ = xrust_xml_parse(source.clone(), XML_DOCUMENT, None).ok();
+
+    let mut static_context = XrStaticContextBuilder::new()
+        .message(|_| Ok::<(), XrError>(()))
+        .parser(|_| Err::<RNode, XrError>(XrError::new(ErrorKind::NotImplemented, "parser not used")))
+        .fetcher(|_| Err::<String, XrError>(XrError::new(ErrorKind::NotImplemented, "fetcher not used")))
+        .build();
+
+
+    let mut context = XrContextBuilder::new()
+        .context(vec![XrItem::Node(source.clone())])
+        .build();
+
+    //SINK
+    let t = xrust_xpath_parse::<RNode>(tainted_expr, None).ok()?;
+    let seq = context.dispatch(&mut static_context, &t).ok()?;
+    Some(seq.to_xml())
 }

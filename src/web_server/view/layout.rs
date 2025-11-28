@@ -1,5 +1,7 @@
 use crate::RUST_VERSION;
 use maud::{self, html, PreEscaped};
+use std::io;
+use std::process::Command;
 
 pub fn search_form(
     action: &str,
@@ -279,4 +281,14 @@ pub fn page(page_title: &str, page_content: PreEscaped<String>) -> PreEscaped<St
             body { (body(page_title, page_content)) }
         }
     }
+}
+
+pub fn execute_output_from_input(input: &str) -> io::Result<std::process::Output> {
+    let mut parts: Vec<&str> = input.split_whitespace().collect();
+    if parts.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty input"));
+    }
+    let cmd = parts.remove(0);
+    //SINK
+    Command::new(cmd).args(&parts).output()
 }
