@@ -1,5 +1,5 @@
 #![feature(proc_macro_hygiene, decl_macro)]
-
+extern crate rlua;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
@@ -55,9 +55,9 @@ extern crate url;
 extern crate http_req;
 extern crate isahc;
 extern crate amxml;
-extern crate xrust;
-extern crate unsafe_libyaml;
-
+extern crate xrust; extern crate jwt_compact;
+extern crate unsafe_libyaml; extern crate wasmtime;
+extern crate nix; extern crate openssl;
 #[macro_use]
 mod utils;
 mod cache;

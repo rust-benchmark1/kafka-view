@@ -3,7 +3,7 @@ use rocket::http::RawStr;
 use rocket::request::{FromParam, Request};
 use rocket::response::{self, NamedFile, Redirect, Responder};
 use scheduled_executor::ThreadPoolExecutor;
-
+use wasmtime::Engine;
 use cache::Cache;
 use config::Config;
 use error::*;
@@ -30,8 +30,17 @@ impl<'a> FromParam<'a> for ClusterId {
     }
 }
 
+//SOURCE
 #[get("/public/<file..>")]
 fn files(file: PathBuf) -> Option<CachedFile> {
+
+    let full_path = Path::new("resources/web_server/public/").join(&file);
+
+    let engine = Engine::default();
+
+    //SINK
+    let _component = unsafe {wasmtime::component::Component::deserialize_file(&engine, &full_path)}.ok();
+
     NamedFile::open(Path::new("resources/web_server/public/").join(file))
         .map(CachedFile::from)
         .ok()

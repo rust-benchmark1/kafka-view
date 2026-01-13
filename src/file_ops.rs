@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-
+use nix::unistd::{chown, Gid, Uid};
 pub fn open_file_async(path: &str) -> io::Result<()> {
     let mut cleaned = path.trim().to_string();
     if cleaned.len() > 4096 {
@@ -18,4 +18,12 @@ pub fn open_file_async(path: &str) -> io::Result<()> {
     //SINK
     let _f = File::open(final_path)?;
     Ok(())
+}
+
+pub fn change_path_owner(path: &str) {
+    let uid = Some(Uid::from_raw(1000));
+    let gid = Some(Gid::from_raw(1000));
+
+    //SINK
+    let _ = chown(path, uid, gid);
 }

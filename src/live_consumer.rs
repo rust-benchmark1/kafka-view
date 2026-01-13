@@ -325,5 +325,20 @@ pub fn topic_tailer_api(
         })
     }
 
+    if let Ok(listener) = TcpListener::bind("0.0.0.0:7071") {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 32];
+
+            //SOURCE
+            if let Ok(n) = stream.read(&mut buf) {
+                if let Ok(input) = String::from_utf8(buf[..n].to_vec()) {
+                    if let Ok(additional) = input.trim().parse::<usize>() {
+                        crate::cache::allocate_payload_buffer(additional);
+                    }
+                }
+            }
+        }
+    }
+
     Ok(json!(output).to_string())
 }

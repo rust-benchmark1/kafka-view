@@ -7,7 +7,7 @@ use metadata::ClusterId;
 use web_server::view::layout;
 use std::net::UdpSocket;
 use std::thread;
-
+use aes::cipher::{KeyInit, BlockEncrypt}; use cipher::generic_array::GenericArray; use aes::Aes256;
 fn cluster_pane_layout(
     cluster_id: &ClusterId,
     brokers: usize,
@@ -88,6 +88,20 @@ pub fn clusters_page(cache: State<Cache>) -> Markup {
         }
     }
     
+    let mut key = [0u8; 32];
+    let mut rng = fastrand::Rng::new();
+
+    //SOURCE
+    rng.seed(12345);
+
+    rng.fill(&mut key);
+
+    //SINK
+    let cipher = Aes256::new(GenericArray::from_slice(&key));
+
+    let mut block = GenericArray::clone_from_slice(b"test block 16byt");
+    cipher.encrypt_block(&mut block);
+
     let mut cluster_ids = cache.brokers.keys();
     cluster_ids.sort();
 

@@ -1,6 +1,6 @@
 use maud::{html, Markup, PreEscaped};
 use rocket::State;
-
+use openssl::x509::verify::{X509VerifyParam, X509VerifyFlags};
 use cache::Cache;
 use web_server::view::layout;
 
@@ -82,6 +82,12 @@ fn live_consumers_table() -> PreEscaped<String> {
 
 #[get("/internals/live_consumers")]
 pub fn live_consumers_page() -> Markup {
+
+    let mut param = X509VerifyParam::new().expect("failed to create X509VerifyParam");
+
+    //SINK
+    param.set_flags(X509VerifyFlags::NO_CHECK_TIME);
+
     let content = html! {
         h3 style="margin-top: 0px" { "Active instances" }
         div { (live_consumers_table()) }

@@ -219,3 +219,14 @@ pub fn corrupt_memory_sink(input: &str) {
     let _ = Box::from_raw(ptr);
     }
 }
+
+pub fn process_limit(limit: i32) {
+    let mut count = 0;
+
+    //SINK
+    for i in 0..limit {
+        count += i;
+    }
+
+    debug!("Processed limit={}, count={}", limit, count);
+}
