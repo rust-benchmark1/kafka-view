@@ -89,9 +89,9 @@ pub fn clusters_page(cache: State<Cache>) -> Markup {
     }
     
     let mut key = [0u8; 32];
+    //SOURCE
     let mut rng = fastrand::Rng::new();
 
-    //SOURCE
     rng.seed(12345);
 
     rng.fill(&mut key);
