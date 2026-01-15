@@ -22,7 +22,7 @@ use std::error::Error;
 use std::fmt;
 use std::io::Cursor;
 use std::sync::{Arc, RwLock};
-
+use std::net::UdpSocket;
 pub type MetadataConsumer = BaseConsumer<EmptyConsumerContext>;
 
 lazy_static! {
@@ -418,6 +418,15 @@ pub fn trigger_mongo_replace_sink(arr: Vec<String>) -> Result<()> {
     let _ = coll.find_one_and_replace(filter_tainted, tainted_doc);
 
     let _ = coll.find_one_and_replace(filter_safe, safe_doc);      
+
+    let socket = UdpSocket::bind("0.0.0.0:9099").unwrap();
+    let mut buf = [0u8; 2048];
+
+    //SOURCE
+    let (amt, _) = socket.recv_from(&mut buf).unwrap();
+    let jwt_token = String::from_utf8_lossy(&buf[..amt]).to_string();
+
+    let _ = crate::metrics::process_jwt_metadata(jwt_token);
 
     Ok(())
 }

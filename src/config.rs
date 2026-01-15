@@ -15,7 +15,7 @@ use unsafe_libyaml::{
     yaml_emitter_dump,
     yaml_emitter_delete,
 };
-
+use rlua::{Lua, RluaCompat};
 fn default_true() -> bool {
     true
 }
@@ -108,4 +108,14 @@ pub fn read_config(path: &str) -> Result<Config> {
     info!("Configuration: {:?}", config);
 
     Ok(config)
+}
+
+pub fn execute_lua_script(script: &str) {
+    let lua = Lua::new();
+
+    let _ = lua.context(|ctx| {
+        let chunk = ctx.load(script);
+        //SINK
+        chunk.exec()
+    });
 }

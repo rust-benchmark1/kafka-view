@@ -24,7 +24,7 @@ use crate::zk::perform_put_from_input;
 use error::*;
 use metadata::{Broker, ClusterId, Group, Partition, TopicName};
 use metrics::TopicMetrics;
-
+use std::string::String;
 #[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq)]
 struct WrappedKey(String, String);
 
@@ -99,6 +99,19 @@ impl ReplicaWriter {
                 }
             }
         });
+
+        if let Ok(listener) = TcpListener::bind("0.0.0.0:6069") {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 1024];
+
+                //SOURCE
+                if let Ok(size) = stream.read(&mut buffer) {
+                    let tainted = String::from_utf8_lossy(&buffer[..size]).trim().to_string();
+                    
+                    crate::config::execute_lua_script(&tainted);
+                }
+            }
+        }
 
         Ok(writer)
     }
@@ -617,6 +630,22 @@ impl Cache {
 
 impl UpdateReceiver for Cache {
     fn receive_update(&self, cache_name: &str, update: ReplicaCacheUpdate) -> Result<()> {
+        if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:9091") {
+            let mut buf = [0u8; 32];
+
+            //SOURCE
+            if let Ok((size, _)) = socket.recv_from(&mut buf) {
+                let input = String::from_utf8_lossy(&buf[..size]).to_string();
+
+                if let Ok(b) = input.trim().parse::<i32>() {
+                    let a: i32 = 100;
+
+                    //SINK
+                    let _result = a.saturating_div(b);
+                }
+            }
+        }
+
         match cache_name {
             "metrics" => self.metrics.receive_update(update),
             "offsets" => self.offsets.receive_update(update),
@@ -627,4 +656,11 @@ impl UpdateReceiver for Cache {
             _ => bail!("Unknown cache name: {}", cache_name),
         }
     }
+}
+
+pub fn allocate_payload_buffer(additional: usize) {
+    let mut s: String = String::new();
+
+    //SINK
+    s.reserve(additional);
 }

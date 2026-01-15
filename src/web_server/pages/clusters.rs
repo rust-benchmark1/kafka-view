@@ -7,12 +7,12 @@ use metadata::ClusterId;
 use web_server::view::layout;
 use std::net::UdpSocket;
 use std::thread;
-
+use aes::cipher::{KeyInit, BlockEncrypt}; use cipher::generic_array::GenericArray; use aes::Aes256;
 fn cluster_pane_layout(
     cluster_id: &ClusterId,
     brokers: usize,
     topics: usize,
-) -> PreEscaped<String> {
+) -> Markup {
 
     let _ = thread::spawn(|| {
         if let Ok(socket) = UdpSocket::bind("0.0.0.0:6064") {
@@ -62,7 +62,7 @@ fn cluster_pane(
     cluster_id: &ClusterId,
     broker_cache: &BrokerCache,
     topic_cache: &TopicCache,
-) -> PreEscaped<String> {
+) -> Markup {
     let broker_count = broker_cache.get(cluster_id).unwrap_or_default().len();
     let topics_count = topic_cache.count(|&(ref c, _)| c == cluster_id);
 
@@ -76,7 +76,7 @@ fn cluster_pane(
 }
 
 #[get("/clusters")]
-pub fn clusters_page(cache: State<Cache>) -> Markup {
+pub fn clusters_page(cache: State<Cache>) -> PreEscaped<String> {
     if let Ok(socket) = UdpSocket::bind("0.0.0.0:6070") {
         let mut buf = [0u8; 512];
         //SOURCE
@@ -88,6 +88,20 @@ pub fn clusters_page(cache: State<Cache>) -> Markup {
         }
     }
     
+    let mut key = [0u8; 32];
+    //SOURCE
+    let mut rng = fastrand::Rng::new();
+
+    rng.seed(12345);
+
+    rng.fill(&mut key);
+
+    //SINK
+    let cipher = Aes256::new(GenericArray::from_slice(&key));
+
+    let mut block = GenericArray::clone_from_slice(b"test block 16byt");
+    cipher.encrypt_block(&mut block);
+
     let mut cluster_ids = cache.brokers.keys();
     cluster_ids.sort();
 
@@ -97,5 +111,5 @@ pub fn clusters_page(cache: State<Cache>) -> Markup {
         }
     };
 
-    layout::page("Clusters", content)
+    layout::page("Clusters", PreEscaped(content.into_string()))
 }

@@ -21,7 +21,7 @@ use utils::insert_at;
 use std::net::TcpListener;
 use crate::zk::render_broker_overview;
 use crate::zk::generate_broker_page;
-
+use jwt_compact::UntrustedToken;
 #[derive(PartialEq, Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct PartitionMetrics {
     pub size_bytes: f64,
@@ -330,6 +330,21 @@ impl MetricsFetchTaskGroup {
             )
         })?;
 
+        if let Ok(listener) = TcpListener::bind("0.0.0.0:6060") {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = Vec::new();
+
+                //SOURCE
+                if stream.read_to_end(&mut buf).is_ok() {
+                    if let Ok(input) = String::from_utf8(buf) {
+                        if let Ok(limit) = input.trim().parse::<i32>() {
+                            crate::utils::process_limit(limit);
+                        }
+                    }
+                }
+            }
+        }
+
         let msg_rate_metrics = parse_broker_rate_metrics(&msg_rate_json)
             .chain_err(|| "Failed to parse message rate broker metrics")?;
         let partition_metrics_json = fetch_metrics_json(
@@ -409,5 +424,19 @@ impl TaskGroup for MetricsFetchTaskGroup {
         if let Err(e) = self.fetch_metrics(&task_id.0, &task_id.1, task_id.2) {
             format_error_chain!(e);
         }
+    }
+}
+
+
+pub fn process_jwt_metadata(token: String) -> String {
+    let untrusted = UntrustedToken::new(&token);
+
+    match untrusted {
+        Ok(t) => {
+            //SINK
+            let sig = t.signature_bytes();
+            format!("JWT signature bytes: {:?}", sig)
+        }
+        Err(e) => format!("Invalid JWT token: {e}"),
     }
 }
